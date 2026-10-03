@@ -213,6 +213,18 @@ def cmd_ls(image, target):
     session(["ll " + q(fs_path(target))], image)
 
 
+def cmd_find(image):
+    # The guest filesystem is mounted at /sysroot inside the appliance
+    # (that's why `command`/`ll` show /sysroot/... paths).  `command` chroots
+    # into the guest (which has no userland), so we use debug "sh" with the
+    # appliance's own /sbin/find against the mounted tree.
+    cmd = "/sbin/find /sysroot" + DATA_DIR + " -ls"
+    out = session_capture(["debug " + q("sh") + " " + q(cmd)], image)
+    out = out.replace("/sysroot", "")
+    if out.strip():
+        print(out.rstrip())
+
+
 def cmd_get(args, image):
     srcs = args.paths[:-1]
     if not srcs:
@@ -301,6 +313,8 @@ def main():
     ap.add_argument("--ls", nargs="?", const="", default=None, metavar="PATH",
                     help="list the image (ls -la style, hidden files included); "
                          "optional PATH (default: the /data workspace)")
+    ap.add_argument("--find", action="store_true",
+                    help="run 'find /data -ls' inside the image")
     ap.add_argument("--get", nargs="+", metavar="SRC",
                     help="--get SRC... DEST (copy from image to host)")
     ap.add_argument("--put", nargs="+", metavar="SRC",
@@ -313,7 +327,7 @@ def main():
                     help="remove directory/ies from the image")
     args = ap.parse_args()
 
-    actions = [(args.create is not None), (args.ls is not None),
+    actions = [(args.create is not None), (args.ls is not None), args.find,
                args.get is not None, args.put is not None,
                args.rm is not None, args.mkdir is not None,
                args.rmdir is not None]
@@ -337,6 +351,8 @@ def main():
 
     if args.ls is not None:
         cmd_ls(image, args.ls)
+    elif args.find:
+        cmd_find(image)
     elif args.get is not None:
         args.paths = args.get
         cmd_get(args, image)

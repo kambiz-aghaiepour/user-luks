@@ -17,6 +17,8 @@ created /home/kambiz/secure.img (20 GB, LUKS+ext4); workspace: /data
   `/data` workspace, close it. Size prompted interactively (default **10 GB**)
   or fixed with `--size N` (GB).
 - `--ls` — `ls -l`-style listing of the workspace inside the image.
+- `--find` — runs `find /data -ls` inside the image (inode, size, dates,
+  permissions; hidden files included; output paths shown as `/data/...`).
 - `--get` — copy file(s) **out of** the image (cp-like, multiple sources ok).
   Wildcards (`*`, `?`, `[...]`) in the source are expanded **inside the
   image** (shell semantics: dotfiles only match when the pattern starts with
@@ -55,6 +57,7 @@ export PATH=$HOME/bin:$PATH        # add to ~/.bashrc
 ```
 user-luks.py --create PATH [--size N]      # create image (default 10 GB)
 user-luks.py -i PATH --ls [PATH]             # list workspace or given PATH (ls -la, hidden files included: file or dir)
+user-luks.py -i PATH --find                  # run 'find /data -ls' inside the image
 user-luks.py -i PATH --get SRC... DEST     # image  -> host (cp-like)
 user-luks.py -i PATH --put SRC... DEST     # host   -> image (cp-like)
 user-luks.py -i PATH --rm PATH...          # delete file(s)
