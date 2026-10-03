@@ -124,10 +124,18 @@ def run_gf(lines, image, capture=False):
     return out
 
 
+def wait_dm_line():
+    """Guestfish line that waits (up to ~8s) for the dm node to appear;
+    RHEL7's appliance sometimes creates /dev/mapper/<name> late."""
+    return ('debug "sh" "i=0; while [ $i -lt 40 ]; do '
+            '[ -e /dev/mapper/vol ] && break; i=$((i+1)); sleep 0.2; done"')
+
+
 def session(ops, image):
     """Open the LUKS volume, mount it, run ops, then unmount and close."""
     run_gf(["run",
             "luks-open /dev/sda vol",
+            wait_dm_line(),
             "mount /dev/mapper/vol /"] + ops +
            ["umount /",
             "luks-close /dev/mapper/vol"], image)
@@ -137,6 +145,7 @@ def session_capture(ops, image):
     """Like session() but return guestfish's combined stdout (for listing)."""
     return run_gf(["run",
                    "luks-open /dev/sda vol",
+                   wait_dm_line(),
                    "mount /dev/mapper/vol /"] + ops +
                   ["umount /",
                    "luks-close /dev/mapper/vol"], image, capture=True)
@@ -197,6 +206,7 @@ def cmd_create(args):
     run_gf(["run",
             "luks-format /dev/sda 0",
             "luks-open /dev/sda vol",
+            wait_dm_line(),
             "mkfs ext4 /dev/mapper/vol",
             "mount /dev/mapper/vol /",
             "mkdir /data",
@@ -216,9 +226,12 @@ def cmd_ls(image, target):
 def cmd_find(image):
     # The guest filesystem is mounted at /sysroot inside the appliance
     # (that's why `command`/`ll` show /sysroot/... paths).  `command` chroots
-    # into the guest (which has no userland), so we use debug "sh" with the
-    # appliance's own /sbin/find against the mounted tree.
-    cmd = "/sbin/find /sysroot" + DATA_DIR + " -ls"
+    # into the guest (which has no userland), so we use debug "sh" against
+    # the mounted tree.
+    # find(1) lives at /bin/find on RHEL7's appliance and /sbin/find on
+    # Fedora's; the daemon's PATH has only one of /bin or /sbin in
+    # "command", so use `debug "sh"` where a plain `find` resolves.
+    cmd = "find /sysroot" + DATA_DIR + " -ls"
     out = session_capture(["debug " + q("sh") + " " + q(cmd)], image)
     out = out.replace("/sysroot", "")
     if out.strip():

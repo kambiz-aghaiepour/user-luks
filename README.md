@@ -149,6 +149,7 @@ default of 10.
 | `could not create appliance through libvirt ... Cannot set up guest memory` | Host RAM pressure; use `LIBGUESTFS_BACKEND=direct` (script default) and/or free memory. |
 | `guestfish: error: expecting a device name` (delete this) | Only relevant to interactive libguestfs use; the script always uses the guestfish API path. |
 | QEMU: `Parameter 'key-secret' is required for cipher` | Running an old copy of the script without `--format=raw`. Update. |
+| `debug: /bin/sh: /sbin/find: No such file or directory` (RHEL7) | RHEL7's appliance keeps findutils at `/bin/find`; the script resolves `find` via PATH. Update. |
 | Passphrase prompt appears twice on `--create` | Expected: once for `luks-format`, once for `luks-open`. |
 
 ## License
