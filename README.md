@@ -18,6 +18,9 @@ created /home/kambiz/secure.img (20 GB, LUKS+ext4); workspace: /data
   or fixed with `--size N` (GB).
 - `--ls` — `ls -l`-style listing of the workspace inside the image.
 - `--get` — copy file(s) **out of** the image (cp-like, multiple sources ok).
+  Wildcards (`*`, `?`, `[...]`) in the source are expanded **inside the
+  image** (shell semantics: dotfiles only match when the pattern starts with
+  a dot).
 - `--put` — copy file(s) **into** the image (cp-like, multiple sources ok).
 - `--rm`, `--mkdir`, `--rmdir` — manage files/directories in the image.
 - `-h` / `--help`.
@@ -77,6 +80,11 @@ user-luks.py -i ~/secure.img --put ./notes.txt ./todo.txt /
 
 # Get files out (multiple sources; destination must be an existing dir)
 user-luks.py -i ~/secure.img --get notes.txt todo.txt /tmp/restore/
+
+# Wildcard sources are expanded inside the image (quote them so the shell
+# doesn't try to expand locally):
+user-luks.py -i ~/secure.img --get "subdir/*" .
+# Note: wildcard gets prompt for the passphrase twice (listing, then download).
 
 # Or rename a single file while extracting
 user-luks.py -i ~/secure.img --get /notes.txt /tmp/notes-copy.txt

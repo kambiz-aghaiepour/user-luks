@@ -18,6 +18,7 @@ Requirements: libguestfs-tools (guestfish, > libguestfs 1.30), coreutils
 (truncate), ~256 MB free RAM for the appliance.
 """
 import argparse
+import fnmatch
 import os
 import subprocess
 import sys
@@ -91,7 +92,7 @@ def fs_path(p):
     return DATA_DIR + "/" + p
 
 
-def run_gf(lines, image):
+def run_gf(lines, image, capture=False):
     script = "\n".join(lines) + "\n"
     fd, tmp = tempfile.mkstemp(prefix="user-luks-", suffix=".gf")
     try:
@@ -99,8 +100,18 @@ def run_gf(lines, image):
     finally:
         os.close(fd)
     rc = 1
+    out = ""
     try:
-        rc = subprocess.call([GUESTFISH, "--format=raw", "-a", image, "-f", tmp], env=BASE_ENV)
+        if capture:
+            p = subprocess.Popen([GUESTFISH, "--format=raw", "-a", image, "-f", tmp],
+                                 env=BASE_ENV, stdout=subprocess.PIPE)
+            out, _ = p.communicate()
+            rc = p.returncode
+            if not isinstance(out, str):
+                out = out.decode("utf-8", "replace")
+        else:
+            rc = subprocess.call([GUESTFISH, "--format=raw", "-a", image, "-f", tmp],
+                                 env=BASE_ENV)
     except OSError as e:
         err("cannot run guestfish (%s)" % e)
     finally:
@@ -110,6 +121,7 @@ def run_gf(lines, image):
             pass
     if rc != 0:
         err("guestfish failed (exit %d) - see output above" % rc)
+    return out
 
 
 def session(ops, image):
@@ -119,6 +131,47 @@ def session(ops, image):
             "mount /dev/mapper/vol /"] + ops +
            ["umount /",
             "luks-close /dev/mapper/vol"], image)
+
+
+def session_capture(ops, image):
+    """Like session() but return guestfish's combined stdout (for listing)."""
+    return run_gf(["run",
+                   "luks-open /dev/sda vol",
+                   "mount /dev/mapper/vol /"] + ops +
+                  ["umount /",
+                   "luks-close /dev/mapper/vol"], image, capture=True)
+
+
+def has_glob(s):
+    return any(c in s for c in "*?[")
+
+
+def split_pattern(s):
+    """Split an image path into (rel_dir, pattern); only the final component
+    may contain wildcards."""
+    s = s.strip()
+    idx = s.rfind("/")
+    if idx == -1:
+        return "", s
+    return s[:idx], s[idx + 1:]
+
+
+def expand_glob(src, image):
+    """Expand a shell-style wildcard source against the guest filesystem.
+    Returns sorted matched absolute image paths.  Dotfiles are only matched
+    when the pattern itself starts with a dot (shell semantics)."""
+    rel_dir, pat = split_pattern(src)
+    if has_glob(rel_dir):
+        err("wildcards are only supported in the last path component: %s" % src)
+    base = fs_path(rel_dir if rel_dir else "/")
+    out = session_capture(["ls " + q(base)], image)
+    names = [line.strip() for line in out.splitlines() if line.strip()]
+    matches = [n for n in names
+               if (pat.startswith(".") or not n.startswith("."))
+               and fnmatch.fnmatch(n, pat)]
+    if not matches:
+        err("no files match %s in the image" % src)
+    return sorted(base.rstrip("/") + "/" + n for n in matches)
 
 
 def cmd_create(args):
@@ -165,13 +218,24 @@ def cmd_get(args, image):
     if not srcs:
         err("--get requires at least one source and a destination")
     dest = real(args.paths[-1])
-    multi = len(srcs) > 1
+
+    # Expand wildcard sources against the guest filesystem first.
+    items = []          # (label, image_abs_path)
+    wildcard_srcs = [s for s in srcs if has_glob(s)]
+    plain_srcs = [s for s in srcs if not has_glob(s)]
+    for s in plain_srcs:
+        items.append((s, fs_path(s)))
+    for s in wildcard_srcs:
+        for m in expand_glob(s, image):     # errors if nothing matches
+            items.append((s, m))
+
+    multi = len(items) > 1
     if multi and not os.path.isdir(dest):
         err("with multiple sources the destination must be an existing directory")
+
     ops = []
     done = []
-    for s in srcs:
-        isrc = fs_path(s)
+    for label, isrc in items:
         if os.path.isdir(dest):
             d = os.path.join(dest, os.path.basename(isrc))
         else:
@@ -179,9 +243,9 @@ def cmd_get(args, image):
                 err("with multiple sources the destination must be a directory")
             d = dest
         ops.append("download %s %s" % (q(isrc), q(d)))
-        done.append((isrc, d))
+        done.append((label, isrc, d))
     session(ops, image)
-    for isrc, d in done:
+    for label, isrc, d in done:
         print("got %s -> %s" % (isrc, d))
 
 
