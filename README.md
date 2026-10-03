@@ -51,7 +51,7 @@ export PATH=$HOME/bin:$PATH        # add to ~/.bashrc
 
 ```
 user-luks.py --create PATH [--size N]      # create image (default 10 GB)
-user-luks.py -i PATH --ls                  # list workspace contents
+user-luks.py -i PATH --ls [PATH]             # list workspace or given PATH (ls -la, hidden files included: file or dir)
 user-luks.py -i PATH --get SRC... DEST     # image  -> host (cp-like)
 user-luks.py -i PATH --put SRC... DEST     # host   -> image (cp-like)
 user-luks.py -i PATH --rm PATH...          # delete file(s)
@@ -65,8 +65,12 @@ user-luks.py -i PATH --rmdir DIR...        # remove dir(s)
 # Create a 20 GB encrypted container
 user-luks.py --create ~/secure.img --size 20
 
-# List its contents
+# List its contents (ls -la style, hidden files included)
 user-luks.py -i ~/secure.img --ls
+
+# List another location - a directory or a single file
+user-luks.py -i ~/secure.img --ls /data/archives
+user-luks.py -i ~/secure.img --ls /data/notes.txt
 
 # Put several files into the container root
 user-luks.py -i ~/secure.img --put ./notes.txt ./todo.txt /

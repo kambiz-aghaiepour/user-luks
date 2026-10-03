@@ -82,8 +82,11 @@ def q(s):
 
 def fs_path(p):
     """Map a user-supplied image path to an absolute path under DATA_DIR."""
-    p = p.strip().lstrip("/")
-    if p == "" or p == DATA_DIR.lstrip("/"):
+    p = p.strip()
+    if p == DATA_DIR or p.startswith(DATA_DIR + "/"):
+        return p                       # already an absolute image path
+    p = p.lstrip("/")
+    if p == "" or p == "data":
         return DATA_DIR
     return DATA_DIR + "/" + p
 
@@ -149,8 +152,12 @@ def cmd_create(args):
     print("created %s (%d GB, LUKS+ext4); workspace: %s" % (path, size, DATA_DIR))
 
 
-def cmd_ls(image):
-    session(["ll " + q(DATA_DIR)], image)
+def cmd_ls(image, target):
+    if not target:
+        target = DATA_DIR
+    # `ll` lists in 'ls -la' format (hidden files included) and also works
+    # on a single file path.
+    session(["ll " + q(fs_path(target))], image)
 
 
 def cmd_get(args, image):
@@ -227,8 +234,9 @@ def main():
                     help="create a new LUKS image at PATH")
     ap.add_argument("--size", type=int, default=None, metavar="N",
                     help="image size in GB for --create (default: 10)")
-    ap.add_argument("--ls", action="store_true",
-                    help="list files in the image (ls -l style)")
+    ap.add_argument("--ls", nargs="?", const="", default=None, metavar="PATH",
+                    help="list the image (ls -la style, hidden files included); "
+                         "optional PATH (default: the /data workspace)")
     ap.add_argument("--get", nargs="+", metavar="SRC",
                     help="--get SRC... DEST (copy from image to host)")
     ap.add_argument("--put", nargs="+", metavar="SRC",
@@ -241,7 +249,7 @@ def main():
                     help="remove directory/ies from the image")
     args = ap.parse_args()
 
-    actions = [(args.create is not None), args.ls,
+    actions = [(args.create is not None), (args.ls is not None),
                args.get is not None, args.put is not None,
                args.rm is not None, args.mkdir is not None,
                args.rmdir is not None]
@@ -263,8 +271,8 @@ def main():
     if not os.path.isfile(image):
         err("image not found: %s" % image)
 
-    if args.ls:
-        cmd_ls(image)
+    if args.ls is not None:
+        cmd_ls(image, args.ls)
     elif args.get is not None:
         args.paths = args.get
         cmd_get(args, image)
