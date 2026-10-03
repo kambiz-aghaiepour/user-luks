@@ -138,5 +138,4 @@ default of 10.
 
 ## License
 
-Distributed as-is; see the repository for history. (No license file is
-included; add one if you intend to share.)
+Released under the **GNU General Public License v3.0** — see [LICENSE](LICENSE).
